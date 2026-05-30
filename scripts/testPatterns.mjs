@@ -38,7 +38,8 @@ function names(input) {
 
 const nameSamples = [
   ['Signed by John Smith and Alice Wong.', ['John Smith', 'Alice Wong']],
-  ["Contact Mary O'Brien today.", ["Mary O'Brien"]],
+  ['Please contact Mary O’Brien today.', ['Mary O’Brien']],
+  ['Reviewed by Anne-Marie Becker.', ['Anne-Marie Becker']],
   ['The Quick report', []], // "The" stopword-led
   ['no names', []],
 ];
