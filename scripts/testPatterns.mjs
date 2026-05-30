@@ -40,6 +40,12 @@ const nameSamples = [
   ['Signed by John Smith and Alice Wong.', ['John Smith', 'Alice Wong']],
   ['Please contact Mary O’Brien today.', ['Mary O’Brien']],
   ['Reviewed by Anne-Marie Becker.', ['Anne-Marie Becker']],
+  ['Met with Robert De Niro today.', ['Robert De Niro']], // capitalised connector
+  // In real PDFs each line is a separate text run, so names never share a line
+  // with the next line's leading word. The extractor inserts '\n' at line
+  // breaks; the name regex never crosses one, and stopword-led runs are dropped.
+  ['Alice Wong\nOn Tuesday we met', ['Alice Wong']],
+  ['John Smith\nTo: the board', ['John Smith']],
   ['The Quick report', []], // "The" stopword-led
   ['no names', []],
 ];

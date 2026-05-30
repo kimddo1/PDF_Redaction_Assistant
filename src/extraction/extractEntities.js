@@ -30,24 +30,29 @@ function buildPageIndex(textContent, viewport) {
   const index = []; // { start, end, x, y, w, h }
 
   for (const item of textContent.items) {
-    if (!item.str) continue;
-    const start = text.length;
-    text += item.str;
-    const end = text.length;
+    if (item.str) {
+      const start = text.length;
+      text += item.str;
 
-    // Map the text-space transform into viewport (top-left origin) space.
-    const tx = pdfjsLib.Util.transform(viewport.transform, item.transform);
-    const fontHeight = Math.hypot(tx[2], tx[3]);
-    index.push({
-      start,
-      end,
-      x: tx[4],
-      y: tx[5] - fontHeight, // tx[5] is the baseline; box top sits a glyph above it
-      w: item.width * viewport.scale,
-      h: fontHeight,
-    });
+      // Map the text-space transform into viewport (top-left origin) space.
+      const tx = pdfjsLib.Util.transform(viewport.transform, item.transform);
+      const fontHeight = Math.hypot(tx[2], tx[3]);
+      index.push({
+        start,
+        end: text.length,
+        x: tx[4],
+        y: tx[5] - fontHeight, // tx[5] is the baseline; box top sits a glyph above it
+        w: item.width * viewport.scale,
+        h: fontHeight,
+      });
+    }
 
-    text += item.hasEOL ? '\n' : ' ';
+    // pdf.js emits a separate zero-width item with hasEOL=true at every line
+    // break. We must honour it even when the string is empty, otherwise line
+    // breaks collapse into spaces and a name greedily joins the next line's
+    // first word ("John Smith" + "To:" -> "John Smith To").
+    if (item.hasEOL) text += '\n';
+    else if (item.str) text += ' ';
   }
 
   return { text, index };

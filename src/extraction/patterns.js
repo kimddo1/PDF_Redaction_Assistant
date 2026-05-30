@@ -37,8 +37,12 @@ const NAME_WORD = String.raw`[A-Z](?:[a-z]+|['’\-][A-Z]?[a-z]+)(?:['’\-][A-Z
 const NAME_CONNECTOR = String.raw`(?:van|von|de|del|della|der|da|di|la|le|bin|al)`;
 
 export function buildNameRegex() {
+  // Separator is horizontal whitespace only ([ \t]) — never a newline — so a
+  // name cannot greedily swallow a capitalised word from the following line
+  // (e.g. "Alice Wong\nOn ..." must not become "Alice Wong On").
+  const SEP = String.raw`[ \t]+`;
   return new RegExp(
-    String.raw`\b${NAME_WORD}(?:\s+(?:${NAME_CONNECTOR}\s+)?${NAME_WORD}){1,3}\b`,
+    String.raw`\b${NAME_WORD}(?:${SEP}(?:${NAME_CONNECTOR}${SEP})?${NAME_WORD}){1,3}\b`,
     'g',
   );
 }
@@ -46,10 +50,18 @@ export function buildNameRegex() {
 // Common words that survive the Title Case heuristic but are not names.
 // Used to reduce obvious false positives without overfitting.
 export const NAME_STOPWORDS = new Set([
+  // Articles / determiners / conjunctions / prepositions that can start a
+  // Title Case run at the beginning of a sentence.
   'The', 'This', 'That', 'These', 'Those', 'From', 'To', 'For', 'And', 'But',
+  'On', 'In', 'At', 'By', 'Of', 'Or', 'As', 'Is', 'Was', 'With', 'A', 'An',
+  // Common letter/memo and document words.
   'Dear', 'Sincerely', 'Regards', 'Best', 'Page', 'Date', 'Subject', 'Re',
-  'Mr', 'Mrs', 'Ms', 'Dr', 'Monday', 'Tuesday', 'Wednesday', 'Thursday',
-  'Friday', 'Saturday', 'Sunday', 'January', 'February', 'March', 'April',
-  'May', 'June', 'July', 'August', 'September', 'October', 'November',
-  'December',
+  'Please', 'Signed', 'Witnessed', 'Reviewed', 'Filed', 'Contact', 'Met',
+  'Note', 'Attn',
+  // Titles (the following word is the actual name and matches on its own).
+  'Mr', 'Mrs', 'Ms', 'Dr', 'Prof',
+  // Weekdays and months (handled as date components, not names).
+  'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday',
+  'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August',
+  'September', 'October', 'November', 'December',
 ]);
