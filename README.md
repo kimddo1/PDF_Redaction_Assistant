@@ -135,3 +135,71 @@ src/
   App.jsx                     # state orchestration
 scripts/testPatterns.mjs      # regex sanity checks
 ```
+
+---
+
+## Thought process & design decisions
+
+### Problem decomposition
+
+The assignment has two largely independent sub-problems: (1) render a PDF faithfully in the browser, and (2) detect and locate sensitive entities precisely enough to draw highlight boxes over them. I kept these as separate modules (`pdf/`, `extraction/`) so each could be developed and tested independently.
+
+### Why React + Vite?
+
+The three-panel layout involves a non-trivial shared state (selected entity IDs, current page, scroll target) that needs to flow in multiple directions — from the panel into the viewer, and from the viewer back into the thumbnail strip. A lightweight component tree with a single `selectedIds` set at the root is the clearest way to express that, and Vite's fast HMR made iteration fast without any configuration overhead.
+
+### Why continuous scroll instead of page-by-page navigation?
+
+Page-flipping feels unnatural for a redaction reviewer who wants to skim context around a detected name. Continuous scroll lets the user see whether a name appears at the bottom of one page and the top of the next without explicitly changing pages. The `IntersectionObserver` on each `PdfPage` drives the active thumbnail passively as the user scrolls, so there is no coordination code needed.
+
+### The core extraction algorithm: offset-index mapping
+
+This was the central engineering challenge. Regexes must run on *continuous text*, but pdf.js decomposes a page into dozens of small "items", each with its own position. Two approaches were considered:
+
+| Approach | Pros | Cons |
+|---|---|---|
+| Run regexes per item | Simple | Multi-word entities (e.g. "12 January 2024") spanning two items are split and never matched |
+| **Concatenate all items, map offsets back** (chosen) | Handles cross-item entities naturally | Requires a mapping layer |
+
+The chosen approach: while concatenating, push `{ start, end, x, y, w, h }` per item into an index array. After matching, walk the index once per match and clip each overlapping segment proportionally. The clipping is O(items per page) — fast enough in practice.
+
+### Coordinate system
+
+pdf.js uses a bottom-left origin. The conversion to CSS top-left is handled by `pdfjsLib.Util.transform(viewport.transform, item.transform)`. Crucially, rects are stored normalised to scale 1; each `PdfPage` multiplies by its current render scale at draw time. This means the overlay stays aligned at any window width without storing or recomputing positions.
+
+### The `hasEOL` line-break bug (found and fixed)
+
+An early version skipped items where `item.str` was empty. pdf.js emits empty items with `hasEOL = true` at every line break — skipping them collapses newlines into spaces, which made the name regex greedily absorb the capitalised first word of the next line ("Alice Wong" + next-line "On March…" → "Alice Wong On"). Fixing this required two changes: (a) always append `\n` when `hasEOL` is true regardless of `item.str`, and (b) change the regex separator from `\s+` to `[ \t]+` (horizontal-only).
+
+### Name heuristic design
+
+A full NLP library (e.g. compromise.js) would give better recall but adds ~150 kB to the bundle and would be non-obvious to a reviewer. Instead a structural regex was chosen:
+
+- A *word* must start with a capital and be followed by lowercase letters (or apostrophe/hyphen groups), ruling out acronyms and lone initials.
+- A *name* requires at least two such words separated by horizontal whitespace only, with an optional lowercase connector (`van`, `de`, …) between them.
+- A stopword filter on the first word removes sentences that happen to start with a capital (e.g., "The Final Report") and common document keywords.
+
+This approach is readable, testable with plain `node scripts/testPatterns.mjs`, and produces zero false positives on the test PDF for names. False positives (e.g. "Confidential Memorandum" as a section heading) are surfaced to the reviewer rather than silently suppressed, which matches the brief's intent.
+
+### UI decisions
+
+- **Checkbox select-all with indeterminate state**: the brief's wireframe showed `▢ Show Dates`, implying a checkbox. Implementing it with three states (none/some/all selected) lets a reviewer quickly toggle a whole category when scanning for one entity type. The `indeterminate` state cannot be set via a React prop — it requires an imperative `useRef` + `useEffect`.
+- **No pagination** — all pages render eagerly. For the review task this is preferable (no loading gaps mid-document), and realistic review PDFs are short enough that the memory cost is acceptable.
+- **Yellow/blue colour scheme** — high contrast against the dark viewer background, distinct from each other at a glance, and semi-transparent so the underlying text remains legible.
+- **Loading spinner** — pdf.js parses and extracts text asynchronously; without feedback the drop zone appears to hang for large files. A spinner card replaces the drop zone during parsing.
+
+---
+
+## AI tools used
+
+This project was developed with the assistance of **Claude Code** (Anthropic's AI-powered CLI), using the `claude-sonnet-4-6` model. AI assistance covered the full development lifecycle:
+
+- **Architecture design** — the three-panel layout, state model, and offset-index extraction algorithm were planned conversationally before any code was written.
+- **Code generation** — all source files were generated or co-edited in the session, with the developer reviewing and approving each change before it was committed.
+- **Debugging** — two non-trivial bugs were diagnosed with AI assistance:
+  - The `hasEOL` line-break collapse bug (described above)
+  - A scroll-precision issue where clicking an entity scrolled to the page rather than the exact highlight box (fixed by adding `data-entity` attributes to highlight `<div>` elements)
+- **Testing** — the `scripts/testPatterns.mjs` sanity-check script and `scripts/verifyExtract.mjs` end-to-end verification script were generated to confirm regex coverage against known inputs.
+- **Documentation** — the README extraction rationale and this section were drafted with AI assistance and then reviewed for accuracy.
+
+All commits were reviewed and approved by the developer. The AI acted as an accelerant for implementation detail; architectural choices and acceptance criteria were driven by the developer throughout.
