@@ -56,6 +56,45 @@ function buildPageIndex(textContent, viewport) {
 }
 
 /**
+ * Collapse artifactual spaces introduced when a PDF encodes individual glyphs
+ * as separate text items. Returns a normalized string and an origPos array so
+ * that normalized[i] came from text[origPos[i]] — allowing regex match offsets
+ * to be translated back to original positions for highlight geometry.
+ *
+ * Rules (applied in order, cumulative):
+ *   "2 7 th"  → "27th"   split day-digits + ordinal suffix
+ *   "30 th"   → "30th"   day + separated ordinal suffix
+ *   "202 6"   → "2026"   4-digit year split 3+1 across items
+ */
+function buildNormalizedText(text) {
+  const skip = new Set();
+
+  // "2 7 th" → "27th": single digit, space, single digit, space, ordinal
+  for (const m of text.matchAll(/\b(\d) (\d) (st|nd|rd|th)\b/gi)) {
+    skip.add(m.index + 1);           // space between the two digit characters
+    skip.add(m.index + 3);           // space between second digit and ordinal
+  }
+  // "30 th" → "30th": one or two digits, space, ordinal suffix
+  for (const m of text.matchAll(/\b(\d{1,2}) (st|nd|rd|th)\b/gi)) {
+    skip.add(m.index + m[1].length); // the space between digits and suffix
+  }
+  // "202 6" → "2026": three-digit prefix, space, one trailing digit of a year
+  for (const m of text.matchAll(/\b(\d{3}) (\d)\b/g)) {
+    skip.add(m.index + 3);           // the space inside the split year
+  }
+
+  const origPos = [];
+  let normalized = '';
+  for (let i = 0; i < text.length; i++) {
+    if (!skip.has(i)) {
+      origPos.push(i);
+      normalized += text[i];
+    }
+  }
+  return { normalized, origPos };
+}
+
+/**
  * Resolve a [matchStart, matchEnd) character span to highlight rectangles.
  * Items partially covered by the match are clipped proportionally so the box
  * hugs the matched substring rather than the whole text run.
@@ -79,32 +118,39 @@ function rectsForSpan(matchStart, matchEnd, index) {
   return rects;
 }
 
-function collectNlpNames(text, pageNumber, index) {
+// Translate a [normStart, normEnd) span in the normalized text back to original
+// character positions using the origPos mapping, then resolve to rects.
+function rectsForNormSpan(normStart, normEnd, origPos, index) {
+  if (normStart >= origPos.length) return [];
+  const origStart = origPos[normStart];
+  const origEnd = (origPos[Math.min(normEnd, origPos.length) - 1] ?? origPos[origPos.length - 1]) + 1;
+  return rectsForSpan(origStart, origEnd, index);
+}
+
+function collectNlpNames(normalized, origPos, pageNumber, index) {
   const entities = [];
-  for (const match of nlp(text).people().json({ offset: true })) {
-    // compromise sometimes appends punctuation to the match text; strip it so
-    // the highlight box and the displayed label don't include a trailing period.
-    const raw = match.text;
-    const value = raw.replace(/[\s.,;:!?]+$/, '');
-    // em/en dashes appear in headings ("Page Two — Correspondence") not names
+  for (const match of nlp(normalized).people().json({ offset: true })) {
+    // compromise sometimes appends punctuation; strip trailing non-name chars.
+    const value = match.text.replace(/[\s.,;:!?()\[\]]+$/, '');
+    // em/en dashes appear in headings ("Page Two — Correspondence"), not names.
     if (!value || value.split(/\s+/).length < 2 || /[—–]/.test(value)) continue;
-    const start = match.offset.start;
-    const end = start + value.length;
-    const rects = rectsForSpan(start, end, index);
+    const normStart = match.offset.start;
+    const normEnd = normStart + value.length;
+    const rects = rectsForNormSpan(normStart, normEnd, origPos, index);
     if (rects.length === 0) continue;
     entities.push({ id: nextId(), type: 'name', text: value, pageNumber, rects });
   }
   return entities;
 }
 
-function collectMatches(regex, text, type, pageNumber, index, filter) {
+function collectMatches(regex, normalized, origPos, type, pageNumber, index) {
   const entities = [];
-  for (const match of text.matchAll(regex)) {
+  for (const match of normalized.matchAll(regex)) {
     const value = match[0].trim();
-    if (filter && !filter(value)) continue;
-    const start = match.index;
-    const end = start + match[0].length;
-    const rects = rectsForSpan(start, end, index);
+    if (!value) continue;
+    const normStart = match.index;
+    const normEnd = normStart + match[0].length;
+    const rects = rectsForNormSpan(normStart, normEnd, origPos, index);
     if (rects.length === 0) continue;
     entities.push({ id: nextId(), type, text: value, pageNumber, rects });
   }
@@ -125,10 +171,11 @@ export async function extractEntities(pdfDoc) {
     const viewport = page.getViewport({ scale: 1 });
     const textContent = await page.getTextContent();
     const { text, index } = buildPageIndex(textContent, viewport);
+    const { normalized, origPos } = buildNormalizedText(text);
 
     all.push(
-      ...collectMatches(buildDateRegex(), text, 'date', pageNumber, index),
-      ...collectNlpNames(text, pageNumber, index),
+      ...collectMatches(buildDateRegex(), normalized, origPos, 'date', pageNumber, index),
+      ...collectNlpNames(normalized, origPos, pageNumber, index),
     );
 
     page.cleanup();
