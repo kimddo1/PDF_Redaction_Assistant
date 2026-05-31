@@ -229,9 +229,8 @@ uppercase guard (occasional lowercase misfires).
 
 ## AI tools used
 
-This project was developed with the assistance of **Claude Code** (Anthropic's
-AI-powered CLI), `claude-sonnet-4-6` model. AI assistance covered the full
-development lifecycle:
+This project was developed with the assistance of **Claude Code** (Anthropic's AI-powered CLI).
+AI assistance covered the full development lifecycle:
 
 - **Architecture** — three-panel layout, state model, and offset-index extraction
   algorithm were planned conversationally before any code was written.
