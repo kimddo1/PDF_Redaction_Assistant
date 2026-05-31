@@ -1,9 +1,20 @@
 import { useRef, useState } from 'react';
 
 /** Initial drop / browse screen shown before a PDF is loaded. */
-export default function UploadScreen({ onFile, error }) {
+export default function UploadScreen({ onFile, error, loading }) {
   const inputRef = useRef(null);
   const [dragging, setDragging] = useState(false);
+
+  if (loading) {
+    return (
+      <div className="upload-screen">
+        <div className="loading-card">
+          <div className="loading-card__spinner" />
+          <p className="loading-card__text">Analysing PDF…</p>
+        </div>
+      </div>
+    );
+  }
 
   const handleFiles = (files) => {
     const file = files?.[0];

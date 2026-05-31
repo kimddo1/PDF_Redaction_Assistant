@@ -60,6 +60,18 @@ export default function App() {
     });
   }, []);
 
+  // Select or deselect every entity of one type at once (no scroll side-effect).
+  const handleSelectGroup = useCallback((type, groupEntities, selectAll) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      for (const e of groupEntities) {
+        if (selectAll) next.add(e.id);
+        else next.delete(e.id);
+      }
+      return next;
+    });
+  }, []);
+
   const handleJump = useCallback((pageNumber) => {
     setScrollTarget({ pageNumber, nonce: Date.now() });
   }, []);
@@ -90,6 +102,7 @@ export default function App() {
       <UploadScreen
         onFile={handleFile}
         error={status === 'error' ? error : ''}
+        loading={status === 'loading'}
       />
     );
   }
@@ -135,6 +148,7 @@ export default function App() {
           entities={entities}
           selectedIds={selectedIds}
           onSelect={handleSelect}
+          onSelectGroup={handleSelectGroup}
         />
       </main>
     </div>

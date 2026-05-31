@@ -94,6 +94,7 @@ export default function PdfPage({
         {highlights.map((h) => (
           <div
             key={h.id}
+            data-entity={h.entityId}
             className={`highlight highlight--${h.type}${h.selected ? ' is-selected' : ''}`}
             style={{
               left: h.rect.x * scale,
