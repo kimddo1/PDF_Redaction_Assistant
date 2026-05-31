@@ -25,3 +25,7 @@ dist-ssr
 
 # Claude Code / harness
 .claude/
+
+# Dev/test artefacts
+samples/
+docs/
