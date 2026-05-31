@@ -85,27 +85,18 @@ See `src/extraction/extractEntities.js` and `src/extraction/patterns.js`.
 | `Month DD, YYYY` | `January 12, 2024` |
 | `DD Month YYYY` | `12 January 2024` |
 
-**Person names** — a heuristic regex for Title Case sequences of two or more
-words, allowing interior apostrophes (`O'Brien`), hyphens (`Anne-Marie`) and
-lowercase connectors (`van`, `de`, `von`, …):
-
-```
-word = [A-Z](?:[a-z]+ | ['’-][A-Z]?[a-z]+)(['’-][A-Z]?[a-z]+)*
-name = word (\s+ (connector\s+)? word){1,3}
-```
-
-Matches whose first word is a common non-name (`The`, `Dear`, weekday/month
-names, titles like `Mr`/`Dr`, …) are dropped via a small stopword list to
-reduce obvious false positives. A `compromise.js` NER pass could be swapped in
-behind the same `extractEntities` interface if higher recall were needed.
+**Person names** — detected using [compromise](https://github.com/spencermountain/compromise)
+NLP. `nlp(pageText).people()` returns contextually identified person names with
+character offsets that map directly back into the highlight geometry pipeline.
+A post-filter rejects matches containing em/en dashes (page headings such as
+"Page Two — Correspondence"). Matches shorter than two words are also dropped.
 
 ## Known limitations
 
-- **Heuristic names**: capitalised non-name phrases (e.g. a sentence-initial
-  verb, some headings, or product names) can slip through; conversely an
-  all-caps or all-lowercase name is missed. This is expected per the brief —
-  false positives are surfaced for the reviewer to ignore and never crash the
-  app.
+- **NLP names**: compromise's people() model is strong but not perfect —
+  unusual names or highly domain-specific text can be missed or misidentified.
+  All-caps or all-lowercase names are not detected. False positives are surfaced
+  for the reviewer to ignore and never crash the app.
 - **Scanned PDFs** with no embedded text layer yield no entities (there is no
   text to match); the viewer still renders the pages.
 - **Partial-item clipping** is proportional (assumes roughly even glyph widths),
@@ -171,15 +162,11 @@ pdf.js uses a bottom-left origin. The conversion to CSS top-left is handled by `
 
 An early version skipped items where `item.str` was empty. pdf.js emits empty items with `hasEOL = true` at every line break — skipping them collapses newlines into spaces, which made the name regex greedily absorb the capitalised first word of the next line ("Alice Wong" + next-line "On March…" → "Alice Wong On"). Fixing this required two changes: (a) always append `\n` when `hasEOL` is true regardless of `item.str`, and (b) change the regex separator from `\s+` to `[ \t]+` (horizontal-only).
 
-### Name heuristic design
+### Name detection design
 
-A full NLP library (e.g. compromise.js) would give better recall but adds ~150 kB to the bundle and would be non-obvious to a reviewer. Instead a structural regex was chosen:
+Person name detection uses [compromise](https://github.com/spencermountain/compromise), a lightweight NLP library with a trained English model. `nlp(pageText).people().json({ offset: true })` returns each detected name with a `{ start, length }` character offset that plugs directly into the existing `rectsForSpan()` geometry function — no changes to the highlight pipeline were needed.
 
-- A *word* must start with a capital and be followed by lowercase letters (or apostrophe/hyphen groups), ruling out acronyms and lone initials.
-- A *name* requires at least two such words separated by horizontal whitespace only, with an optional lowercase connector (`van`, `de`, …) between them.
-- A stopword filter on the first word removes sentences that happen to start with a capital (e.g., "The Final Report") and common document keywords.
-
-This approach is readable, testable with plain `node scripts/testPatterns.mjs`, and produces zero false positives on the test PDF for names. False positives (e.g. "Confidential Memorandum" as a section heading) are surfaced to the reviewer rather than silently suppressed, which matches the brief's intent.
+Compared to the earlier hand-rolled Title Case regex, compromise understands context: it correctly identifies "John Smith" after "Signed by" while ignoring "United Kingdom" or "New York" in the same document. A single post-filter rejects matches containing em/en dashes (which indicate page headings like "Page Two — Correspondence" rather than person names).
 
 ### UI decisions
 
