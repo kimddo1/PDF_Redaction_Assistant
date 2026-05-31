@@ -10,12 +10,9 @@
 // The viewer multiplies them by the current render scale at draw time. The
 // PDF -> CSS y-axis flip is handled by pdf.js's viewport.transform.
 
+import nlp from 'compromise';
 import { pdfjsLib } from '../pdf/pdfClient.js';
-import {
-  buildDateRegex,
-  buildNameRegex,
-  NAME_STOPWORDS,
-} from './patterns.js';
+import { buildDateRegex } from './patterns.js';
 
 let idCounter = 0;
 const nextId = () => `e${idCounter++}`;
@@ -82,12 +79,22 @@ function rectsForSpan(matchStart, matchEnd, index) {
   return rects;
 }
 
-function looksLikeName(text) {
-  const words = text.split(/\s+/);
-  // Reject if the first word is a stopword (e.g. "Dear John" -> "Dear" leads).
-  if (NAME_STOPWORDS.has(words[0])) return false;
-  // Reject single-word leftovers (regex requires 2+, but guard anyway).
-  return words.length >= 2;
+function collectNlpNames(text, pageNumber, index) {
+  const entities = [];
+  for (const match of nlp(text).people().json({ offset: true })) {
+    // compromise sometimes appends punctuation to the match text; strip it so
+    // the highlight box and the displayed label don't include a trailing period.
+    const raw = match.text;
+    const value = raw.replace(/[\s.,;:!?]+$/, '');
+    // em/en dashes appear in headings ("Page Two — Correspondence") not names
+    if (!value || value.split(/\s+/).length < 2 || /[—–]/.test(value)) continue;
+    const start = match.offset.start;
+    const end = start + value.length;
+    const rects = rectsForSpan(start, end, index);
+    if (rects.length === 0) continue;
+    entities.push({ id: nextId(), type: 'name', text: value, pageNumber, rects });
+  }
+  return entities;
 }
 
 function collectMatches(regex, text, type, pageNumber, index, filter) {
@@ -121,7 +128,7 @@ export async function extractEntities(pdfDoc) {
 
     all.push(
       ...collectMatches(buildDateRegex(), text, 'date', pageNumber, index),
-      ...collectMatches(buildNameRegex(), text, 'name', pageNumber, index, looksLikeName),
+      ...collectNlpNames(text, pageNumber, index),
     );
 
     page.cleanup();

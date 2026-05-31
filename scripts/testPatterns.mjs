@@ -1,6 +1,7 @@
-// Lightweight, dependency-free sanity check for the date/name patterns.
+// Sanity check for date patterns.
+// Name detection now uses compromise NLP -- tested via scripts/verifyExtract.mjs.
 // Run with: node scripts/testPatterns.mjs
-import { buildDateRegex, buildNameRegex, NAME_STOPWORDS } from '../src/extraction/patterns.js';
+import { buildDateRegex } from '../src/extraction/patterns.js';
 
 let passed = 0;
 let failed = 0;
@@ -28,30 +29,6 @@ const dateSamples = [
 for (const [input, want] of dateSamples) {
   const got = [...input.matchAll(buildDateRegex())].map((m) => m[0]);
   expect(`date: "${input}"`, got, want);
-}
-
-function names(input) {
-  return [...input.matchAll(buildNameRegex())]
-    .map((m) => m[0])
-    .filter((n) => !NAME_STOPWORDS.has(n.split(/\s+/)[0]));
-}
-
-const nameSamples = [
-  ['Signed by John Smith and Alice Wong.', ['John Smith', 'Alice Wong']],
-  ['Please contact Mary O’Brien today.', ['Mary O’Brien']],
-  ['Reviewed by Anne-Marie Becker.', ['Anne-Marie Becker']],
-  ['Met with Robert De Niro today.', ['Robert De Niro']], // capitalised connector
-  // In real PDFs each line is a separate text run, so names never share a line
-  // with the next line's leading word. The extractor inserts '\n' at line
-  // breaks; the name regex never crosses one, and stopword-led runs are dropped.
-  ['Alice Wong\nOn Tuesday we met', ['Alice Wong']],
-  ['John Smith\nTo: the board', ['John Smith']],
-  ['The Quick report', []], // "The" stopword-led
-  ['no names', []],
-];
-
-for (const [input, want] of nameSamples) {
-  expect(`name: "${input}"`, names(input), want);
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);
