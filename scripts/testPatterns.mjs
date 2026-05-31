@@ -23,6 +23,12 @@ const dateSamples = [
   ['12 January 2024', ['12 January 2024']],
   ['2024-01-12', ['2024-01-12']],
   ['Meeting on 3 Feb 2024 and 03-02-2024.', ['3 Feb 2024', '03-02-2024']],
+  // Month YYYY — CV / contract range format
+  ['Sep 2022', ['Sep 2022']],
+  ['Mar 2026 – Apr 2026', ['Mar 2026', 'Apr 2026']],
+  ['(Graduation: Jun 2028)', ['Jun 2028']],
+  // Month YYYY must not shadow Month DD, YYYY
+  ['January 12, 2024', ['January 12, 2024']],
   ['no dates here', []],
 ];
 

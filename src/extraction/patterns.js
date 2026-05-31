@@ -20,6 +20,9 @@ export const DATE_PATTERNS = {
 
   // DD Month YYYY (e.g. 12 January 2024)
   dayMonthYear: String.raw`\b\d{1,2}(?:st|nd|rd|th)?\s+${MONTHS}\.?\s+\d{4}\b`,
+
+  // Month YYYY (e.g. Sep 2022, January 2024) — common in CVs and contracts
+  monthYear: String.raw`\b${MONTHS}\s+\d{4}\b`,
 };
 
 /** Single combined date regex (global, case-insensitive). */

@@ -132,8 +132,9 @@ function collectNlpNames(normalized, origPos, pageNumber, index) {
   for (const match of nlp(normalized).people().json({ offset: true })) {
     // compromise sometimes appends punctuation; strip trailing non-name chars.
     const value = match.text.replace(/[\s.,;:!?()\[\]]+$/, '');
-    // em/en dashes appear in headings ("Page Two — Correspondence"), not names.
-    if (!value || value.split(/\s+/).length < 2 || /[—–]/.test(value)) continue;
+    // em/en dashes appear in headings, not names. First char must be uppercase —
+    // compromise occasionally fires on lowercase common words (e.g. "grant consideration").
+    if (!value || value.split(/\s+/).length < 2 || /[—–]/.test(value) || !/^[A-Z]/.test(value)) continue;
     const normStart = match.offset.start;
     const normEnd = normStart + value.length;
     const rects = rectsForNormSpan(normStart, normEnd, origPos, index);
