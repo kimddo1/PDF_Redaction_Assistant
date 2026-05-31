@@ -6,6 +6,9 @@ in a live PDF viewer before deciding what to redact.
 
 No backend, no external API — everything runs in the browser.
 
+## Demo
+[Watch demo](https://github.com/user-attachments/assets/69f52a95-3423-488c-9f16-c4fb9c4ab131)
+
 ## Setup
 
 Requires Node 18+.
